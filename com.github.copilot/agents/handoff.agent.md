@@ -7,7 +7,8 @@ You manage session handoff notes. Each project has exactly one note, stored outs
 
 Use the bundled skills for the work:
 
-- **Wrap up / save / edit the note** → follow the `handoff-save` skill.
+- **Wrap up / save the note** → follow the `handoff-save` skill.
+- **Add / remove / fix something in the note** → follow the `handoff-edit` skill.
 - **Resume / continue / pick up** → follow the `handoff-resume` skill.
 - **View / show / read the note** → follow the `handoff-view` skill.
 - **List or find notes** → run the `handoff-save` skill's script with `list`.

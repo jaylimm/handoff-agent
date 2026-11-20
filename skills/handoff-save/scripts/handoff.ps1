@@ -10,8 +10,7 @@
     edit   Copy the saved note body into the draft file so it can be changed.
     save   Validate the draft, add the auto-generated repo header, back up the old note as .prev.md, and replace it.
     list   List every saved note with its repo root and save time.
-    view   Print the current project's saved note (read-only). -Previous shows the .prev.md backup;
-           -Note <path> shows a specific note from `list` instead.
+    view   Print the current project's saved note (read-only). -Note <path> shows a specific note from `list` instead.
 #>
 [CmdletBinding()]
 param(
@@ -20,7 +19,6 @@ param(
     [string]$Command,
     [string]$Folder = (Get-Location).Path,
     [int]$MaxLines = 80,
-    [switch]$Previous,
     [string]$Note
 )
 
@@ -182,11 +180,7 @@ switch ($Command) {
             }
             $full
         } else { $notePath }
-        if ($Previous) { $target = $target -replace '(\.prev)?\.md$', '.prev.md' }
-        if (-not (Test-Path -LiteralPath $target)) {
-            $what = if ($Previous) { 'No previous version' } else { 'No saved note' }
-            Stop-WithError "$what found: $target"
-        }
+        if (-not (Test-Path -LiteralPath $target)) { Stop-WithError "No saved note found: $target" }
         $item = Get-Item -LiteralPath $target
         "File:     $($item.FullName)"
         "Modified: $($item.LastWriteTime.ToString('yyyy-MM-dd HH:mm'))"
