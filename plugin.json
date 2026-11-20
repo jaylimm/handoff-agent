@@ -1,0 +1,7 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "handoff-agent",
+  "description": "Per-project session handoff notes for GitHub Copilot: /handoff-save to wrap up, /handoff-view to read the note, /handoff-resume to continue in a new chat.",
+  "version": "0.1.0",
+  "keywords": ["handoff", "session", "resume", "memory", "copilot"]
+}
