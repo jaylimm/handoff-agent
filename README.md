@@ -11,6 +11,7 @@ Per-project session handoff notes for GitHub Copilot in VS Code and for Antigrav
 
 ```
 handoff-agent/
+├── install.ps1                         # installs skills + agent for Antigravity and VS Code
 ├── plugin.json                         # Agent Plugins manifest (VS Code)
 ├── .antigravity-plugin/plugin.json     # Antigravity manifest
 ├── com.github.copilot/agents/
@@ -28,34 +29,40 @@ handoff-agent/
 
 ## Prerequisites
 
-- VS Code with GitHub Copilot Chat (setting `chat.plugins.enabled` turned on), or Antigravity
+- Antigravity, or VS Code with GitHub Copilot Chat
 - Windows PowerShell 5.1 or PowerShell 7
-- `git` (optional; enables the repo/branch checks)
+- `git` (to clone the repo; also enables the repo/branch checks)
 
 ## Environment Setup
 
-### VS Code
+Works for Antigravity and VS Code. Do this once per PC, in a normal PowerShell window (not inside the editor).
 
-1. Command Palette → **Chat: Install Plugin from Source**.
-2. Enter `https://github.com/jaylimm/handoff-agent` (or a local folder path) and choose **User**.
-3. Start a new chat; skills load when a session starts.
-
-**Without plugin support:** copy the four folders in `skills\` to `%USERPROFILE%\.copilot\skills\`. You get the slash commands but not the `@Handoff` agent.
-
-### Antigravity
-
-1. From a clone of this repo, run:
+1. **Open each editor at least once**, so its settings folder exists. The installer skips editors it can't find.
+2. **Clone the repo** anywhere; it doesn't need to be an editor project:
    ```powershell
-   agy plugin validate --strict .
-   agy plugin install .
+   git clone https://github.com/jaylimm/handoff-agent "$HOME\handoff-agent"
+   cd "$HOME\handoff-agent"
    ```
-2. Start a new chat. Use the slash commands, or pick the **handoff** agent.
+3. **Run the installer:**
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\install.ps1
+   ```
+   It copies the skills and agent into each editor it finds and prints what it installed. Fix any warning it shows before continuing.
+4. **Fully restart the editor.**
+5. **Open a project** (Antigravity: pick it from the **No Project** menu) and start a new chat.
+6. **Check it works:** type `/handoff`. You should see `/handoff-save`, `/handoff-edit`, `/handoff-view` and `/handoff-resume`.
 
-Both editors use the same notes folder, so a note saved in one can be resumed in the other.
+**Update:** run `git pull`, then step 3 again. **Uninstall:** add `-Uninstall` to the step 3 command (your saved notes are kept).
 
-| Environment variable | Default | Purpose |
+The installer writes only these, and both editors share one notes folder, so a note saved in one can be resumed in the other:
+
+| | Antigravity | VS Code |
 |---|---|---|
-| `HANDOFF_DIR` | `%USERPROFILE%\.copilot\handoffs` | Where notes are stored |
+| Skills | `%USERPROFILE%\.gemini\config\skills\handoff-*` | `%USERPROFILE%\.copilot\skills\handoff-*` |
+| Agent | `%USERPROFILE%\.gemini\config\agents\handoff.md` | `%APPDATA%\Code\User\prompts\handoff.agent.md` |
+| Notes | `%USERPROFILE%\.copilot\handoffs\` (change with the `HANDOFF_DIR` environment variable) | same |
+
+**VS Code alternative:** Command Palette → **Chat: Install Plugin from Source** → `https://github.com/jaylimm/handoff-agent` → **User**. Use either the plugin or the installer for VS Code, not both, or each command appears twice.
 
 ## Command-line Reference
 
@@ -87,7 +94,10 @@ File: `<HANDOFF_DIR>\<folder>-<hash>.md`. The hash comes from the repo path, so 
 
 | Problem | Fix |
 |---|---|
-| Slash commands don't appear | Start a new chat. VS Code: check `chat.plugins.enabled`. Antigravity: check `agy plugin list`. |
+| Slash commands don't appear | Restart the editor and start a new chat. Re-run `.\install.ps1` and check it reports the editor as installed, not skipped. VS Code plugin: check `chat.plugins.enabled`. |
+| Commands appear but the script fails with "running scripts is disabled" | Run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`. Work PCs may lock this; ask IT. |
+| Each command appears twice in VS Code | Both the plugin and the installer are set up. Uninstall the plugin, or delete the `handoff-*` folders in `%USERPROFILE%\.copilot\skills\`. |
+| Antigravity asks permission or fails to save the note | Its command sandbox is blocking writes to `%USERPROFILE%\.copilot\handoffs`. Approve the command, or set `HANDOFF_DIR` to a folder it may write to. |
 | "No saved note found" | Run `/handoff-save` first, or ask `@Handoff` to list notes if the folder was moved. |
 | "Repo match: NO" | The note belongs to another folder; open that folder or save a new note here. |
 | "draft not saved" | A section is missing or the body is over 80 lines; the agent fixes the draft and saves again. |
