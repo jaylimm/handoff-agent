@@ -1,6 +1,6 @@
 # handoff-agent
 
-Per-project session handoff notes for GitHub Copilot in VS Code: save where you stopped, read it back, and continue in a new chat without re-explaining.
+Per-project session handoff notes for GitHub Copilot in VS Code and for Antigravity: save where you stopped, read it back, and continue in a new chat without re-explaining.
 
 - **One note per project.** Notes are stored outside the repo and never committed.
 - **Always fresh.** Each save rebuilds the note; the previous version is kept as `.prev.md`.
@@ -11,9 +11,12 @@ Per-project session handoff notes for GitHub Copilot in VS Code: save where you 
 
 ```
 handoff-agent/
-├── plugin.json                         # Agent Plugins manifest
+├── plugin.json                         # Agent Plugins manifest (VS Code)
+├── .antigravity-plugin/plugin.json     # Antigravity manifest
 ├── com.github.copilot/agents/
-│   └── handoff.agent.md                # @Handoff chat agent
+│   └── handoff.agent.md                # @Handoff chat agent (VS Code)
+├── agents/
+│   └── handoff.md                      # Handoff agent (Antigravity)
 └── skills/
     ├── handoff-save/
     │   ├── SKILL.md                    # /handoff-save
@@ -25,17 +28,30 @@ handoff-agent/
 
 ## Prerequisites
 
-- VS Code with GitHub Copilot Chat, setting `chat.plugins.enabled` turned on
+- VS Code with GitHub Copilot Chat (setting `chat.plugins.enabled` turned on), or Antigravity
 - Windows PowerShell 5.1 or PowerShell 7
 - `git` (optional; enables the repo/branch checks)
 
 ## Environment Setup
+
+### VS Code
 
 1. Command Palette → **Chat: Install Plugin from Source**.
 2. Enter `https://github.com/jaylimm/handoff-agent` (or a local folder path) and choose **User**.
 3. Start a new chat; skills load when a session starts.
 
 **Without plugin support:** copy the four folders in `skills\` to `%USERPROFILE%\.copilot\skills\`. You get the slash commands but not the `@Handoff` agent.
+
+### Antigravity
+
+1. From a clone of this repo, run:
+   ```powershell
+   agy plugin validate --strict .
+   agy plugin install .
+   ```
+2. Start a new chat. Use the slash commands, or pick the **handoff** agent.
+
+Both editors use the same notes folder, so a note saved in one can be resumed in the other.
 
 | Environment variable | Default | Purpose |
 |---|---|---|
@@ -51,27 +67,7 @@ handoff-agent/
 | `/handoff-resume` | Checks the note against the repo and git, summarizes, asks before continuing. |
 | `@Handoff <request>` | Plain-language agent for all of the above, plus "list my handoff notes" (all projects) and deleting a note after you confirm. |
 
-## CLI Flag Summary
-
-The skills call `skills\handoff-save\scripts\handoff.ps1`; you can also run it directly from a project folder.
-
-```powershell
-.\handoff.ps1 <command> [-Folder <path>] [-MaxLines <n>] [-Note <path>]
-```
-
-| Command | Description |
-|---|---|
-| `info` | Repo root, git state, note/draft paths, and whether the note matches this repo. |
-| `edit` | Copies the saved note body into the draft file for editing. |
-| `save` | Validates the draft, adds the git header, backs up the old note to `.prev.md`, saves. |
-| `view` | Prints the saved note. |
-| `list` | Lists every saved note with its repo and save time. |
-
-| Flag | Default | Used by | Description |
-|---|---|---|---|
-| `-Folder` | current directory | all | Project folder to find the note for. |
-| `-MaxLines` | `80` | `save` | Maximum note body length. |
-| `-Note` | — | `view` | View a specific note path from `list` (must be inside `HANDOFF_DIR`). |
+The skills do their work through `skills\handoff-save\scripts\handoff.ps1`. You don't need to run it yourself; for details, see `Get-Help .\handoff.ps1 -Detailed`.
 
 ## Note Format
 
@@ -91,7 +87,7 @@ File: `<HANDOFF_DIR>\<folder>-<hash>.md`. The hash comes from the repo path, so 
 
 | Problem | Fix |
 |---|---|
-| Slash commands don't appear | Start a new chat; check `chat.plugins.enabled`. |
+| Slash commands don't appear | Start a new chat. VS Code: check `chat.plugins.enabled`. Antigravity: check `agy plugin list`. |
 | "No saved note found" | Run `/handoff-save` first, or ask `@Handoff` to list notes if the folder was moved. |
 | "Repo match: NO" | The note belongs to another folder; open that folder or save a new note here. |
-| "draft not saved" | A section is missing or the body is over 80 lines; Copilot fixes the draft and saves again. |
+| "draft not saved" | A section is missing or the body is over 80 lines; the agent fixes the draft and saves again. |
