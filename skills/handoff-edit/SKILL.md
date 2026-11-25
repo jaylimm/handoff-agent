@@ -32,5 +32,5 @@ Run it from the project's working directory (or pass `-Folder <path>`).
 3. Run `edit`. This copies the saved note body into the **Draft** path.
 4. Make the requested change in the draft file. If the request is ambiguous (for example, more than one line could match), ask which one.
 5. **Review with the user.** Show what changed (removed/added lines) and ask: save it, or what else to change? Use your ask-user tool if you have one; otherwise ask in chat and stop. Repeat until the user approves.
-6. Run `save`. If it reports problems, fix the draft and run `save` again.
+6. Run `save`. If it reports problems, fix the draft and run `save` again. If it exits with **POSSIBLE SECRETS**, show the masked list and ask the user to remove them (recommended) or keep them; run `save -AllowSecrets` only if they say keep.
 7. Report the saved path in one line.

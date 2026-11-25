@@ -12,13 +12,13 @@ Each project has its own note, outside the repo. The helper script finds it from
 & "<this skill's folder>\scripts\handoff.ps1" <command>
 ```
 
-Run it from the project's working directory (or pass `-Folder <path>`). Commands: `info`, `edit`, `save`, `list`, `view`.
+Run it from the project's working directory (or pass `-Folder <path>`). Commands: `info`, `check`, `edit`, `save`, `changes`, `list`, `view`.
 
 ## Rules
 
 - **Never write the note file directly.** Only write the draft file, then run `save`. The script adds the repo header, backs up the old note as `.prev.md`, and replaces it.
 - Never put passwords, tokens, keys, or connection strings in the note.
-- Keep it short: bullets, no prose, body limit 80 lines. Facts must be specific (names, numbers, paths, commands).
+- Keep it short: bullets, no prose. Aim for under 150 body lines (hard limit 250). Facts must be specific (names, numbers, paths, commands).
 
 ## Steps
 
@@ -40,6 +40,7 @@ Run it from the project's working directory (or pass `-Folder <path>`). Commands
    - **Waiting on You:** decisions or answers only the user can give.
    - **Don't Do:** constraints the next session must respect (for example "DB is read-only", "don't commit until approved").
    - Don't add a title or repo/branch/git lines. The script generates them.
-3. **Review with the user.** Show the full draft in chat and ask: save it, or what to change? Use your ask-user tool if you have one; otherwise ask in chat and stop. Apply requested changes to the draft and show it again until the user approves.
-4. Run `save`. If it reports problems (missing section, too long), fix the draft and run `save` again.
+3. Run `check`. Fix any missing sections. **Review with the user.** Show the full draft in chat, plus any `check` warnings (length over 150 lines, possible secrets), and ask: save it, or what to change? Use your ask-user tool if you have one; otherwise ask in chat and stop. Apply requested changes to the draft and show it again until the user approves.
+   - **Possible secrets:** list them as `check` printed them (masked) and ask: remove them (recommended) or keep them? Never print the unmasked value.
+4. Run `save`. If it reports problems (missing section, over 250 lines), fix the draft and run `save` again. If it exits with **POSSIBLE SECRETS**, remove them; run `save -AllowSecrets` only if the user explicitly said to keep them.
 5. Report the saved path in one line, then output a copy-ready summary of the note (about 300 words).

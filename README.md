@@ -78,7 +78,7 @@ The skills do their work through `skills\handoff-save\scripts\handoff.ps1`. You 
 
 ## Note Format
 
-File: `<HANDOFF_DIR>\<folder>-<hash>.md`. The hash comes from the repo path, so same-named folders don't collide. The script writes the header (repo, branch, commit, uncommitted files, time); the body must contain these sections:
+File: `<HANDOFF_DIR>\<folder>-<hash>.md`. The hash comes from the repo path, so same-named folders don't collide. The script writes the header: repo, branch, full commit, uncommitted files with `+added/-removed` counts, time, and a fingerprint of the uncommitted files. On resume, `info` uses the header to report commits since the save, rewritten history (rebase/amend/reset), and whether the working files still match the save. The body must contain these sections; aim for under 150 lines (hard limit 250):
 
 ```markdown
 ## Objective & Status
@@ -100,4 +100,5 @@ File: `<HANDOFF_DIR>\<folder>-<hash>.md`. The hash comes from the repo path, so 
 | Antigravity asks permission or fails to save the note | Its command sandbox is blocking writes to `%USERPROFILE%\.copilot\handoffs`. Approve the command, or set `HANDOFF_DIR` to a folder it may write to. |
 | "No saved note found" | Run `/handoff-save` first, or ask `@Handoff` to list notes if the folder was moved. |
 | "Repo match: NO" | The note belongs to another folder; open that folder or save a new note here. |
-| "draft not saved" | A section is missing or the body is over 80 lines; the agent fixes the draft and saves again. |
+| "draft not saved" | A section is missing or the body is over 250 lines; the agent fixes the draft and saves again. |
+| "POSSIBLE SECRETS (not saved)" | The draft looks like it contains a token, key, or password. Remove it, or tell the agent it's safe to keep. |
