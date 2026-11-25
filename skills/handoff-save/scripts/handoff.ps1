@@ -18,6 +18,11 @@
     list     List every saved note with its repo root and save time.
     view     Print the current project's saved note (read-only). -Note <path> shows a specific note from `list` instead.
 
+    -Facts   With edit, check, save, view: work on the project's facts file (<note>.facts.md) instead of the note.
+             The facts file keeps lasting project knowledge (Decisions, Don't Do, Environment & Commands) across saves.
+             `edit -Facts` creates an empty template when there is no facts file yet.
+
+    Limits: note body warns above 150 lines and is refused above 250; facts body warns above 80 and is refused above 150.
     Exit codes: 0 = OK, 1 = error / draft not savable, 2 = draft not saved because it may contain secrets.
 #>
 [CmdletBinding()]
@@ -26,8 +31,9 @@ param(
     [ValidateSet('info', 'changes', 'check', 'edit', 'save', 'list', 'view')]
     [string]$Command,
     [string]$Folder = (Get-Location).Path,
-    [int]$WarnLines = 150,
-    [int]$MaxLines = 250,
+    [switch]$Facts,
+    [int]$WarnLines,
+    [int]$MaxLines,
     [switch]$AllowSecrets,
     [switch]$Preview,
     [string]$Note
@@ -39,12 +45,15 @@ $EndMarker = '<!-- end of auto header -->'
 $RequiredSections = @(
     'Objective & Status',
     'Modified Files & Key Changes',
-    'Verified Facts & Decisions',
+    'Verified Facts',
+    'Active Errors',
     'Tried & Failed',
     'Waiting on You',
-    'Next Steps',
-    "Don't Do"
+    'Next Steps'
 )
+$FactsSections = @('Decisions', "Don't Do", 'Environment & Commands')
+if (-not $PSBoundParameters.ContainsKey('WarnLines')) { $WarnLines = if ($Facts) { 80 } else { 150 } }
+if (-not $PSBoundParameters.ContainsKey('MaxLines')) { $MaxLines = if ($Facts) { 150 } else { 250 } }
 $Utf8 = New-Object System.Text.UTF8Encoding($false)
 $FormatVersion = 2
 $MaxListed = 20
@@ -274,10 +283,19 @@ function Find-Secrets([string]$Text) {
     return $hits
 }
 
+function Test-LegacyBody([string]$Body) {
+    # Notes saved before the facts file existed have "Verified Facts & Decisions" / "Don't Do" and no "Active Errors".
+    return ($Body -notmatch '(?m)^##\s+Active Errors\s*$')
+}
+
+function Get-FactsCount([string]$Body) {
+    return @($Body -split "`n" | Where-Object { $_ -match '^\s*-\s+\S' -and $_ -notmatch '^\s*-\s+None\s*$' }).Count
+}
+
 function Test-Draft([string]$Path) {
     $body = Get-DraftBody $Path
     $problems = @()
-    foreach ($s in $RequiredSections) {
+    foreach ($s in $Sections) {
         if ($body -notmatch ('(?m)^##\s+' + [regex]::Escape($s) + '\s*$')) { $problems += "missing section '## $s'" }
     }
     $lines = ($body -split "`n").Count
@@ -291,8 +309,15 @@ function Format-Secrets($Secrets) {
 
 $root = Get-RepoRoot $Folder
 $notePath = Get-NotePath $root
-$draftPath = $notePath -replace '\.md$', '.draft.md'
-$prevPath = $notePath -replace '\.md$', '.prev.md'
+$noteDraftPath = $notePath -replace '\.md$', '.draft.md'
+$factsPath = $notePath -replace '\.md$', '.facts.md'
+$factsDraftPath = $notePath -replace '\.md$', '.facts.draft.md'
+# edit / check / save / view work on the note by default, or on the facts file with -Facts.
+$targetPath = if ($Facts) { $factsPath } else { $notePath }
+$draftPath = if ($Facts) { $factsDraftPath } else { $noteDraftPath }
+$prevPath = $targetPath -replace '\.md$', '.prev.md'
+$Sections = if ($Facts) { $FactsSections } else { $RequiredSections }
+$kind = if ($Facts) { 'facts file' } else { 'note' }
 
 switch ($Command) {
     'info' {
@@ -303,11 +328,14 @@ switch ($Command) {
         "Branch now:   $($git.Branch)$(if ($git.Head) { " @ $($git.Head)" })"
         "Uncommitted:  $($git.Changes.Count) file(s)"
         "Note:         $notePath"
-        "Draft:        $draftPath"
+        "Draft:        $noteDraftPath"
         if (Test-Path -LiteralPath $notePath) {
             $noteInfo = Read-Note $notePath
             $lines = ($noteInfo.Text -split "`n").Count
             "Note exists:  yes (saved $($noteInfo.Saved), $lines lines)"
+            if (Test-LegacyBody $noteInfo.Body) {
+                "Note layout:  LEGACY (no '## Active Errors'; has Decisions/Don't Do in the note). The next /handoff-save migrates it."
+            }
             if (-not $noteInfo.Root) {
                 "Repo match:   UNKNOWN - note has no handoff-root marker"
             } elseif ([string]::Equals($noteInfo.Root, $root, [StringComparison]::OrdinalIgnoreCase)) {
@@ -348,13 +376,33 @@ switch ($Command) {
         } else {
             "Note exists:  no"
         }
-        if (Test-Path -LiteralPath $draftPath) { "Draft exists: yes (unsaved draft from an earlier wrap-up)" }
+        if (Test-Path -LiteralPath $noteDraftPath) { "Draft exists: yes (unsaved draft from an earlier wrap-up)" }
+        if (Test-Path -LiteralPath $factsPath) {
+            $factsInfo = Read-Note $factsPath
+            $match = if (-not $factsInfo.Root -or [string]::Equals($factsInfo.Root, $root, [StringComparison]::OrdinalIgnoreCase)) { '' } else { " - NO repo match, belongs to $($factsInfo.Root)" }
+            "Facts:        $factsPath ($(Get-FactsCount $factsInfo.Body) entries, updated $($factsInfo.Saved))$match"
+        } else {
+            "Facts:        none yet ($factsPath)"
+        }
+        "Facts draft:  $factsDraftPath"
+        if (Test-Path -LiteralPath $factsDraftPath) { "Facts draft exists: yes (unsaved facts draft from an earlier wrap-up)" }
     }
 
     'edit' {
-        if (-not (Test-Path -LiteralPath $notePath)) { Stop-WithError "No saved note for $root ($notePath)." }
-        [IO.File]::WriteAllText($draftPath, (Read-Note $notePath).Body + "`n", $Utf8)
-        "Draft created from saved note: $draftPath"
+        New-Item -ItemType Directory -Force -Path $HandoffDir | Out-Null
+        if ($Facts -and -not (Test-Path -LiteralPath $factsPath)) {
+            $template = ($FactsSections | ForEach-Object { "## $_`n- None" }) -join "`n"
+            [IO.File]::WriteAllText($draftPath, $template + "`n", $Utf8)
+            "No facts file yet. Empty facts draft created: $draftPath"
+            break
+        }
+        if (-not (Test-Path -LiteralPath $targetPath)) { Stop-WithError "No saved $kind for $root ($targetPath)." }
+        $body = (Read-Note $targetPath).Body
+        if (-not $Facts -and (Test-LegacyBody $body)) {
+            Stop-WithError "Legacy note layout (no '## Active Errors'). Run /handoff-save once to migrate it, then edit."
+        }
+        [IO.File]::WriteAllText($draftPath, $body + "`n", $Utf8)
+        "Draft created from saved ${kind}: $draftPath"
     }
 
     'changes' {
@@ -416,9 +464,9 @@ switch ($Command) {
     }
 
     'check' {
-        if (-not (Test-Path -LiteralPath $draftPath)) { Stop-WithError "Draft not found: $draftPath. Write the note body there first." }
+        if (-not (Test-Path -LiteralPath $draftPath)) { Stop-WithError "Draft not found: $draftPath. Write the $kind body there first." }
         $d = Test-Draft $draftPath
-        "Draft:    $draftPath"
+        "Draft:    $draftPath ($kind)"
         "Lines:    $($d.Lines) body lines (warn above $WarnLines, limit $MaxLines)"
         $missing = @($d.Problems | Where-Object { $_ -like 'missing section*' })
         "Sections: $(if ($missing) { $missing -join '; ' } else { 'OK' })"
@@ -435,7 +483,7 @@ switch ($Command) {
     }
 
     'save' {
-        if (-not (Test-Path -LiteralPath $draftPath)) { Stop-WithError "Draft not found: $draftPath. Write the note body there first." }
+        if (-not (Test-Path -LiteralPath $draftPath)) { Stop-WithError "Draft not found: $draftPath. Write the $kind body there first." }
         $d = Test-Draft $draftPath
         $body = $d.Body
         if ($d.Problems) {
@@ -451,6 +499,18 @@ switch ($Command) {
         }
 
         $git = Get-GitState $root
+        if ($Facts) {
+            $header = @(
+                "# Project facts: $(Split-Path $root -Leaf)",
+                "<!-- handoff-root: $root -->",
+                "<!-- handoff-format: $FormatVersion -->",
+                '',
+                "- **Saved:** $(Get-Date -Format 'yyyy-MM-dd HH:mm (zzz)') | **Root:** ``$root``",
+                '',
+                $EndMarker,
+                ''
+            )
+        } else {
         $num = if ($git.HeadSha) { Get-NumStat $root 'HEAD' } else { $null }
         $changeLines = if ($git.Changes.Count -eq 0) { @('- (none)') } else {
             $shown = @($git.Changes | Select-Object -First 25 | ForEach-Object { Format-Change $root $_ $num })
@@ -471,14 +531,15 @@ switch ($Command) {
             "- **Branch:** $($git.Branch) @ $($git.Head) | **Remote:** $($git.Remote)",
             "- **Uncommitted at save ($($git.Changes.Count)):**"
         ) + $changeLines + @('', $EndMarker, '')
+        }
 
         New-Item -ItemType Directory -Force -Path $HandoffDir | Out-Null
-        $tmp = "$notePath.tmp"
+        $tmp = "$targetPath.tmp"
         [IO.File]::WriteAllText($tmp, (($header -join "`n") + $body + "`n"), $Utf8)
-        if (Test-Path -LiteralPath $notePath) { Copy-Item -LiteralPath $notePath -Destination $prevPath -Force }
-        Move-Item -LiteralPath $tmp -Destination $notePath -Force
+        if (Test-Path -LiteralPath $targetPath) { Copy-Item -LiteralPath $targetPath -Destination $prevPath -Force }
+        Move-Item -LiteralPath $tmp -Destination $targetPath -Force
         Remove-Item -LiteralPath $draftPath -Force
-        "Saved:    $notePath ($($d.Lines) body lines)"
+        "Saved:    $targetPath ($($d.Lines) body lines, $kind)"
         if (Test-Path -LiteralPath $prevPath) { "Previous: $prevPath" }
         if ($d.Lines -gt $WarnLines) { "WARNING:  body is $($d.Lines) lines (soft limit $WarnLines). Consider trimming it with /handoff-edit." }
         if ($d.Secrets) { "Note:     saved with $($d.Secrets.Count) possible secret(s) the user confirmed as safe." }
@@ -492,8 +553,8 @@ switch ($Command) {
                 Stop-WithError "Not a handoff note: $full (notes live in $HandoffDir)."
             }
             $full
-        } else { $notePath }
-        if (-not (Test-Path -LiteralPath $target)) { Stop-WithError "No saved note found: $target" }
+        } else { $targetPath }
+        if (-not (Test-Path -LiteralPath $target)) { Stop-WithError "No saved $kind found: $target" }
         $item = Get-Item -LiteralPath $target
         "File:     $($item.FullName)"
         "Modified: $($item.LastWriteTime.ToString('yyyy-MM-dd HH:mm'))"
@@ -504,13 +565,14 @@ switch ($Command) {
     'list' {
         if (-not (Test-Path -LiteralPath $HandoffDir)) { "No handoff notes yet ($HandoffDir)."; break }
         $notes = Get-ChildItem -LiteralPath $HandoffDir -Filter '*.md' |
-            Where-Object { $_.Name -notmatch '\.(prev|draft)\.md$' } |
+            Where-Object { $_.Name -notmatch '\.(prev|draft|facts)\.md$' } |
             Sort-Object LastWriteTime -Descending
         if (-not $notes) { "No handoff notes yet ($HandoffDir)."; break }
         foreach ($n in $notes) {
             $noteInfo = Read-Note $n.FullName
             $here = if ($noteInfo.Root -and [string]::Equals($noteInfo.Root, $root, [StringComparison]::OrdinalIgnoreCase)) { ' <- current repo' } else { '' }
-            "$($noteInfo.Saved)  $($noteInfo.Root)$here"
+            $hasFacts = if (Test-Path -LiteralPath ($n.FullName -replace '\.md$', '.facts.md')) { ' +facts' } else { '' }
+            "$($noteInfo.Saved)  $($noteInfo.Root)$hasFacts$here"
             "    $($n.FullName)"
         }
     }

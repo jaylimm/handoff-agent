@@ -68,27 +68,39 @@ The installer writes only these, and both editors share one notes folder, so a n
 
 | Command | What it does |
 |---|---|
-| `/handoff-save` | Drafts a fresh note from this chat, shows it, saves after you approve. |
-| `/handoff-edit <change>` | Changes only what you ask, e.g. `/handoff-edit remove the prune decision`. |
-| `/handoff-view` | Shows this project's note as-is (read-only). |
-| `/handoff-resume` | Checks the note against the repo and git, summarizes, asks before continuing. |
+| `/handoff-save` | Drafts a fresh note from this chat plus proposed changes to the project facts, shows them, saves after you approve. |
+| `/handoff-edit <change>` | Changes only what you ask in the note or facts, e.g. `/handoff-edit remove the prune decision`. |
+| `/handoff-view` | Shows this project's note as-is (read-only). `/handoff-view facts` shows the facts file. |
+| `/handoff-resume` | Reads the note and facts, checks what changed in git since the save, summarizes, asks before continuing. |
 | `@Handoff <request>` | Plain-language agent for all of the above, plus "list my handoff notes" (all projects) and deleting a note after you confirm. |
 
 The skills do their work through `skills\handoff-save\scripts\handoff.ps1`. You don't need to run it yourself; for details, see `Get-Help .\handoff.ps1 -Detailed`.
 
 ## Note Format
 
-File: `<HANDOFF_DIR>\<folder>-<hash>.md`. The hash comes from the repo path, so same-named folders don't collide. The script writes the header: repo, branch, full commit, uncommitted files with `+added/-removed` counts, time, and a fingerprint of the uncommitted files. On resume, `info` uses the header to report commits since the save, rewritten history (rebase/amend/reset), and whether the working files still match the save. The body must contain these sections; aim for under 150 lines (hard limit 250):
+Each project has two files in `<HANDOFF_DIR>`, named `<folder>-<hash>`; the hash comes from the repo path, so same-named folders don't collide.
+
+**Note** (`<folder>-<hash>.md`): this session's state, rebuilt on every save. The script writes the header: repo, branch, full commit, uncommitted files with `+added/-removed` counts, time, and a fingerprint of the uncommitted files. On resume, `info` uses the header to report commits since the save, rewritten history (rebase/amend/reset), and whether the working files still match the save; if nothing changed, resume trusts the note without re-reading source files. The body must contain these sections; aim for under 150 lines (hard limit 250):
 
 ```markdown
 ## Objective & Status
-## Modified Files & Key Changes
-## Verified Facts & Decisions
+## Modified Files & Key Changes      <- path:line refs; short snippets only when needed
+## Verified Facts
+## Active Errors                     <- exact message, where, how to reproduce
 ## Tried & Failed
 ## Waiting on You
 ## Next Steps
-## Don't Do
 ```
+
+**Facts** (`<folder>-<hash>.facts.md`): lasting project knowledge that survives every save. `/handoff-save` proposes additions and removals, and nothing changes without your approval. Aim for under 80 lines (hard limit 150):
+
+```markdown
+## Decisions                         <- each with "Why:" and the date
+## Don't Do                          <- "(temporary)" rules are proposed for removal once their condition is met
+## Environment & Commands            <- build / test / run
+```
+
+Notes saved by an older version (with `Verified Facts & Decisions` and `Don't Do` in the note) still resume; the next `/handoff-save` moves their decisions and rules into the facts file.
 
 ## Troubleshooting
 
