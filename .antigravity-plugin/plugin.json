@@ -2,8 +2,8 @@
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "handoff-agent",
   "displayName": "Handoff",
-  "description": "Per-project session handoff notes: save where you stopped, edit or view the note, and resume in a new chat without re-explaining.",
-  "version": "0.1.0",
+  "description": "Per-project session handoff notes with a lasting project facts file: save where you stopped, edit or view the note, and resume in a new chat without re-explaining.",
+  "version": "0.2.0",
   "suggestedPrompts": [
     "Wrap up this session and save a handoff note",
     "Resume from this project's handoff note",
